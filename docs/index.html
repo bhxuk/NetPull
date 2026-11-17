@@ -116,6 +116,17 @@ th{text-align:left;color:var(--muted);font-weight:500;font-size:12px;padding:6px
 td{padding:7px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
 tr:hover td{background:rgba(255,255,255,.035)}
 .tablewrap{overflow-x:auto}
+.topo{position:relative;height:340px;padding:0;overflow:hidden}
+.topo .wires{position:absolute;left:0;top:0;width:620px;height:330px}
+.topo .wires path{fill:none;stroke:#34405a;stroke-width:1.5}
+.topo .wires path.hot{stroke:var(--down);stroke-width:2;filter:drop-shadow(0 0 4px rgba(34,225,240,.8))}
+.node{position:absolute;width:170px;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:6px 10px 6px 38px;font-size:12px;line-height:1.3}
+.node.big{width:180px;background:var(--panel2);padding:8px 10px 8px 40px}
+.node i{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:rgba(34,225,240,.14);color:var(--down);font-style:normal;display:grid;place-items:center;font-size:12px}
+.node b{display:block;font-weight:600}
+.node small{display:block;color:var(--muted);font-size:10.5px}
+.node small.d{color:var(--down)}
+@media (max-width:640px){.topo{transform:scale(.62);transform-origin:0 0;height:220px;width:160%}}
 .dev{display:grid;grid-template-columns:14px 1fr auto;gap:12px;align-items:center;padding:11px 12px;margin-bottom:7px}
 .dot{width:9px;height:9px;border-radius:50%}
 .tag{font-size:11px;color:var(--warn);background:var(--panel2);border-radius:4px;padding:1px 6px;margin-left:8px}
@@ -198,7 +209,7 @@ footer span a{margin-left:0;margin-right:20px}
   <header class="hero">
     <h1>See what's using your network.</h1>
     <div class="row">
-      <p class="lead">NetPull draws every byte going in and out of your PC, names the app behind it, and shows who that app is talking to. Free for Windows 10 and 11.</p>
+      <p class="lead">NetPull draws every byte going in and out of your PC, names the app behind it, shows who that app is talking to, and maps every device on your network. Free for Windows 10 and 11.</p>
       <div>
         <div class="actions">
           <a class="btn primary" href="https://github.com/bhxuk/NetPull/releases/latest/download/NetPull-Setup.exe">
@@ -228,14 +239,14 @@ footer span a{margin-left:0;margin-right:20px}
       <button class="tab" role="tab" aria-selected="true" data-p="graph"><b>Graph</b><span>Live and history. Click a spike to see which apps caused it.</span></button>
       <button class="tab" role="tab" aria-selected="false" data-p="usage"><b>Usage</b><span>How much each app used today, this week, this month.</span></button>
       <button class="tab" role="tab" aria-selected="false" data-p="conn"><b>Connections</b><span>Who every app is talking to, where they are, and how fast.</span></button>
-      <button class="tab" role="tab" aria-selected="false" data-p="devices"><b>Devices</b><span>What's on your home network, and when something new joins.</span></button>
+      <button class="tab" role="tab" aria-selected="false" data-p="devices"><b>Network</b><span>A map of every device on your network, what it is and what it's using.</span></button>
       <button class="tab" role="tab" aria-selected="false" data-p="alerts"><b>Alerts</b><span>New apps, changed apps, heavy use and your data cap.</span></button>
     </div>
 
     <div class="win" role="tabpanel">
       <div class="title"><span>NetPull</span><i>─ ☐ ✕</i></div>
       <div class="body">
-        <aside id="side"><div data-s="graph" class="on">Graph</div><div data-s="usage">Usage</div><div data-s="conn">Connections</div><div data-s="devices">Devices</div><div data-s="alerts">Alerts</div><div>Settings</div></aside>
+        <aside id="side"><div data-s="graph" class="on">Graph</div><div data-s="usage">Usage</div><div data-s="conn">Connections</div><div data-s="devices">Network</div><div data-s="alerts">Alerts</div><div>Settings</div></aside>
         <main>
 
           <div class="pane on" id="p-graph">
@@ -298,12 +309,26 @@ footer span a{margin-left:0;margin-right:20px}
           </div>
 
           <div class="pane" id="p-devices">
-            <div class="ph"><h4>Devices</h4><span class="pill">Last checked 2 min ago</span></div>
-            <div class="box dev"><i class="dot" style="background:var(--good)"></i><div><b>Router</b><span class="sub">192.168.1.1 · Sagemcom</span></div><span class="sw on"></span></div>
-            <div class="box dev"><i class="dot" style="background:var(--good)"></i><div><b>Linux server</b><span class="sub">192.168.1.20 · Intel</span></div><span class="sw on"></span></div>
-            <div class="box dev"><i class="dot" style="background:var(--good)"></i><div><b>Living room TV</b><span class="sub">192.168.1.34 · LG Electronics</span></div><span class="sw on"></span></div>
-            <div class="box dev"><i class="dot" style="background:var(--good)"></i><div><b>Amazon device</b><span class="tag">Not trusted</span><span class="sub">192.168.1.47 · Amazon Technologies</span></div><span class="sw"></span></div>
-            <div class="box dev"><i class="dot" style="background:var(--line2)"></i><div><b>Camera hallway</b><span class="sub">192.168.1.61 · Aqara</span></div><span class="sw on"></span></div>
+            <div class="ph"><h4>Network</h4><span class="pill">UniFi: Connected · 31 devices</span></div>
+            <div class="chips"><span class="on">Map</span><span>List</span></div>
+            <div class="box topo">
+              <svg class="wires" viewBox="0 0 620 330" aria-hidden="true">
+                <path d="M310 42 V72"/>
+                <path d="M310 114 V130 H160 V148 M310 130 H480 V148"/>
+                <path class="hot" d="M160 190 V204 H66 V218"/>
+                <path d="M66 218 V282"/><path class="hot" d="M66 240 H80"/><path d="M66 282 H80"/>
+                <path d="M480 190 V204 H396 V218"/>
+                <path d="M396 218 V282"/><path d="M396 240 H410"/><path class="hot" d="M396 282 H410"/>
+              </svg>
+              <div class="node big" style="left:220px;top:8px"><i>🌐</i><b>Internet</b></div>
+              <div class="node big" style="left:220px;top:72px"><i>⌂</i><b>Cloud Gateway Ultra</b><small>↓ 7.2 MB/s ↑ 410 KB/s</small></div>
+              <div class="node big" style="left:70px;top:148px"><i>⇄</i><b>USW Lite 8 PoE</b><small>Port 1 on gateway</small></div>
+              <div class="node big" style="left:390px;top:148px"><i>◎</i><b>U6 Lite</b><small>14 Wi-Fi devices</small></div>
+              <div class="node" style="left:80px;top:220px"><i>▣</i><b>Linux server</b><small class="d">↓ 6.1 MB/s ↑ 220 KB/s</small></div>
+              <div class="node" style="left:80px;top:262px"><i>▣</i><b>bhxuk-nas</b><small>192.168.0.40</small></div>
+              <div class="node" style="left:410px;top:220px"><i>▭</i><b>Living room TV</b><small>192.168.0.34</small></div>
+              <div class="node" style="left:410px;top:262px"><i>▯</i><b>iPhone</b><small class="d">↓ 1.1 MB/s ↑ 40 KB/s</small></div>
+            </div>
           </div>
 
           <div class="pane" id="p-alerts">
@@ -330,7 +355,7 @@ footer span a{margin-left:0;margin-right:20px}
         <div><b>An app's file changes</b><p>Spots updates, and anything that has swapped out an app you trust.</p></div>
         <div><b>Something uses a lot of data</b><p>500 MB in 10 minutes by default. You set the limit.</p></div>
         <div><b>You near your data cap</b><p>Set your allowance and the day your bill resets.</p></div>
-        <div><b>A new device joins your Wi-Fi</b><p>Quiet checks every 5 minutes, local network only.</p></div>
+        <div><b>A device joins, drops off or comes back</b><p>Quiet checks every 5 minutes. Pick which devices you want to hear about, like the server or cameras.</p></div>
       </div>
     </div>
     <div class="toasts" aria-label="Example Windows notifications from NetPull">

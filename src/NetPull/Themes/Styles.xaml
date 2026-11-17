@@ -202,6 +202,28 @@
     </Setter>
   </Style>
 
+  <Style TargetType="PasswordBox">
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+    <Setter Property="Background" Value="{StaticResource Panel2Brush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/>
+    <Setter Property="CaretBrush" Value="{StaticResource TextBrush}"/>
+    <Setter Property="Padding" Value="8,6"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="PasswordBox">
+          <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8">
+            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- Drop-down lists -->
   <Style TargetType="ComboBoxItem">
     <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>

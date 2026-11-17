@@ -95,6 +95,7 @@ namespace NetPull
             AlertEngine.Start();
             TrafficMonitor.Instance.Start();
             LanWatch.Start();
+            NetworkModel.Start();
 
             // Keep the startup task in step with the setting (it also lets the Start menu open NetPull without a prompt).
             Task.Run(() => Elevation.ApplyTask(Settings.Current.StartWithWindows));

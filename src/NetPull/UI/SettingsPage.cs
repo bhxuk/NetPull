@@ -93,7 +93,7 @@ namespace NetPull.UI
                 Ui.Switch("An app's file has changed", "Spots updates, and anything that has swapped out an app you trust.", s.AlertAppChanged, v => { s.AlertAppChanged = v; Save(); }),
                 Ui.Switch("An app uses a lot of data", null, s.AlertSpike, v => { s.AlertSpike = v; Save(); }),
                 Ui.Row("Counts as a lot", "Alerts once an hour at most for each app.", spikeRow),
-                Ui.Switch("A new device joins my network", null, s.AlertNewDevice, v => { s.AlertNewDevice = v; Save(); }),
+                Ui.Switch("A new device joins my network", "From the local scan, and from UniFi when it's connected.", s.AlertNewDevice, v => { s.AlertNewDevice = v; Save(); }),
                 Ui.Switch("Check my network automatically", "Quiet ARP checks of your local network only.", s.LanWatch, v => { s.LanWatch = v; Save(); LanWatch.Reschedule(); }),
                 Ui.Row("How often", null, lanEvery)
             );
@@ -110,6 +110,58 @@ namespace NetPull.UI
                 Ui.Row("Warn me at", null, Ui.Combo(new[] { "50%", "75%", "80%", "90%" }, Array.IndexOf(new[] { 50, 75, 80, 90 }, s.CapWarnPercent) is int wi && wi >= 0 ? wi : 2,
                     i => { s.CapWarnPercent = new[] { 50, 75, 80, 90 }[i]; Save(); }, 90)),
                 Ui.Row("Count traffic on", "Pick your internet adapter if you also use Tailscale or VMs, so it isn't counted twice.", capAdapter)
+            );
+
+            // Whole network
+            var devSpike = new StackPanel { Orientation = Orientation.Horizontal };
+            devSpike.Children.Add(Number(s.DeviceSpikeMegabytes, v => { s.DeviceSpikeMegabytes = (int)v; Save(); }));
+            devSpike.Children.Add(Margin(Ui.Text("MB in the same time as apps", 13, "MutedBrush"), 8));
+            Section("Whole network",
+                Ui.Switch("Show Tailscale machines", Tailnet.Installed ? "Lists your tailnet on the Network map, with what they send to and from this PC." : "Tailscale isn't installed on this PC.", s.Tailscale, v => { s.Tailscale = v; Save(); }),
+                Ui.Switch("Check what new devices are", "Tries a few common ports (web page, SSH, Plex, cameras, printers...) on new devices to name them. Connect only, nothing is sent.", s.PortScanNew, v => { s.PortScanNew = v; Save(); }),
+                Ui.Switch("Offline and back-online alerts", "Turn it on for each device you care about in its details on the Network page.", s.AlertDeviceOffline, v => { s.AlertDeviceOffline = v; Save(); }),
+                Ui.Switch("A device uses a lot of data", "Needs UniFi.", s.AlertDeviceSpike, v => { s.AlertDeviceSpike = v; Save(); }),
+                Ui.Row("Counts as a lot for a device", null, devSpike)
+            );
+
+            // UniFi
+            var host = new TextBox { Text = string.IsNullOrEmpty(s.UniFiHost) ? GuessGateway() : s.UniFiHost, Width = 240 };
+            var user = new TextBox { Text = s.UniFiUser ?? "", Width = 240 };
+            var pass = new PasswordBox { Width = 240, Password = Secret.Unprotect(s.UniFiPasswordProtected) };
+            var site = new TextBox { Text = string.IsNullOrEmpty(s.UniFiSite) ? "default" : s.UniFiSite, Width = 240 };
+            var result = Ui.Wrap(Settings.Current.UniFi ? "Status: " + NetworkModel.UniFiStatus : "", 12.5);
+            result.Margin = new Thickness(0, 6, 0, 6);
+            void Store()
+            {
+                s.UniFiHost = host.Text.Trim(); s.UniFiUser = user.Text.Trim(); s.UniFiSite = string.IsNullOrWhiteSpace(site.Text) ? "default" : site.Text.Trim();
+                s.UniFiPasswordProtected = Secret.Protect(pass.Password);
+                Save();
+            }
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 4) };
+            buttons.Children.Add(Margin(Ui.Button("Test", async () =>
+            {
+                result.Text = "Testing...";
+                result.Text = await NetworkModel.TestUniFi(host.Text.Trim(), user.Text.Trim(), pass.Password, site.Text.Trim());
+            }, null, Ui.GlyphSearch), 0, 10));
+            buttons.Children.Add(Ui.Button("Save and connect", () =>
+            {
+                Store();
+                s.UniFi = true; Save();
+                NetworkModel.Restart();
+                result.Text = "Saved. Connecting...";
+            }, "AccentButton"));
+            var uniHelp = Ui.Wrap("Optional. Lets NetPull read how much data every device uses, live speeds, which switch port or Wi-Fi access point each one is on, and what it's doing. " +
+                                  "In UniFi, go to Settings, then Admins & Users, and add a local user with the View Only role. NetPull only reads; it can't change anything. The password is encrypted with your Windows account.", 12.5);
+            uniHelp.Margin = new Thickness(0, 8, 0, 6);
+            Section("UniFi (optional)",
+                uniHelp,
+                Ui.Switch("Read data from my UniFi console", null, s.UniFi, v => { s.UniFi = v; Save(); NetworkModel.Restart(); }),
+                Ui.Row("Console address", "Your gateway, for example 192.168.0.1", host),
+                Ui.Row("Username", "A local View Only user", user),
+                Ui.Row("Password", null, pass),
+                Ui.Row("Site", "Leave as default unless you've renamed it", site),
+                buttons,
+                result
             );
 
             // Lookups
@@ -161,6 +213,21 @@ namespace NetPull.UI
             var foot = Ui.Wrap("NetPull " + Updates.CurrentText + "  ·  github.com/" + Updates.Repo, 12);
             foot.Margin = new Thickness(0, 18, 0, 24);
             _body.Children.Add(foot);
+        }
+
+        private static string GuessGateway()
+        {
+            try
+            {
+                foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+                    foreach (var g in ni.GetIPProperties().GatewayAddresses)
+                        if (g.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !g.Address.Equals(System.Net.IPAddress.Any)) return g.Address.ToString();
+                }
+            }
+            catch { }
+            return "";
         }
 
         private static FrameworkElement Margin(FrameworkElement e, double left, double right = 8)

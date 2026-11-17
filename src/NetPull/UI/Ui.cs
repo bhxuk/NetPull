@@ -15,7 +15,7 @@ namespace NetPull.UI
         public const string GlyphGraph = "";
         public const string GlyphUsage = "";
         public const string GlyphConnections = "";
-        public const string GlyphDevices = "";
+        public const string GlyphDevices = "\uE968";
         public const string GlyphAlerts = "";
         public const string GlyphSettings = "";
         public const string GlyphDown = "";

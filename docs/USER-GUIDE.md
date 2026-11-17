@@ -6,7 +6,8 @@ NetPull shows what's using your network: how fast, which app, who it's talking t
 - [Graph](#graph)
 - [Usage](#usage)
 - [Connections](#connections)
-- [Devices](#devices)
+- [Network](#network)
+- [Connecting UniFi](#connecting-unifi)
 - [Alerts](#alerts)
 - [Mini graph and tray icon](#mini-graph-and-tray-icon)
 - [Settings](#settings)
@@ -25,6 +26,8 @@ For the first 10 minutes NetPull quietly learns the apps you already use, so you
 
 ## Graph
 
+Use **This PC** or **All devices** at the top. All devices shows your whole network's traffic from UniFi, and clicking it lists the busiest devices.
+
 The live graph shows the last 5 minutes, second by second. Download is cyan, upload is pink.
 
 - **3 hours, 24 hours, Week, Month** switch to your history. Use the arrows to step back and forward, and **Now** to jump back.
@@ -38,6 +41,7 @@ Totals for **Today, Yesterday, This week, This month, Last 30 days** or **Last 9
 
 - **Apps** lists every app by how much it used. Click an app to see the hosts it talked to.
 - **Hosts** lists websites and servers instead, with their country, ISP and which apps used them.
+- **Devices** lists every device on your network by data used (with UniFi).
 - **Export CSV** saves what's on screen.
 - With a data cap set, a **Billing month** button appears and the cap card shows how much is left.
 
@@ -52,14 +56,34 @@ Every open connection, refreshed every 2 seconds: the app, the host name (or add
 
 UDP doesn't really have connections, so UDP traffic seen in the last two minutes is listed instead.
 
-## Devices
+## Network
 
-NetPull checks your home network every 5 minutes with quiet ARP requests (local network only, no port scanning).
+A map of your whole network. The Internet is at the top, then your router, then (with UniFi) your switches and Wi-Fi access points, with the devices on each one underneath. Your Tailscale machines hang off the Internet as their own group.
 
-- The first check learns what's already there, marks it trusted and doesn't alert.
-- After that, anything new gets an alert and a **Not trusted** tag. Turn on **Trusted** once you know what it is.
-- Click the pencil to give a device a name, or the bin to forget it.
-- Phones and laptops that use a random ("private") Wi-Fi address can show up as new now and then. That's normal.
+- Lines light up cyan when a device is busy. Offline devices are faded. A small amber dot means a device isn't trusted yet.
+- **Map** or **List**: the list sorts devices by what's busy now and shows today's data with UniFi.
+- **Click a device** to see its address, MAC, maker, how it's connected (switch port, or Wi-Fi band, signal and access point), how long it's been connected, ping and when NetPull first saw it.
+- **Services** lists what answered on common ports: web pages, SSH, Remote Desktop, file sharing, Plex, Home Assistant, camera streams, printers and more. Web pages open in your browser with one click. NetPull checks new devices by itself; press **Check again** any time.
+- **Options**: mark it trusted, get an alert when it goes offline (handy for the server, NAS and cameras), give it a monthly data limit (with UniFi), rename it, or forget it.
+- **Ctrl + mouse wheel** zooms the map.
+
+NetPull checks your home network every 5 minutes with quiet ARP requests (local network only). The first check learns what's already there, marks it trusted and doesn't alert. After that, anything new gets an alert.
+
+Phones and laptops that use a random ("private") Wi-Fi address can show up as new now and then. That's normal.
+
+## Connecting UniFi
+
+A PC can only see its own traffic. Your UniFi console sees everyone's, so NetPull can read it from there. It's optional, and read-only.
+
+1. In UniFi, open **Settings → Admins & Users** and add an admin. Choose **Restrict to local access only**, give it a username and password, and set the role to **View Only**.
+2. In NetPull, open **Settings → UniFi (optional)**. The console address is filled in with your gateway (for example `192.168.0.1`). Enter the username and password, then press **Test**.
+3. Press **Save and connect**.
+
+You then get, for every device: live speed, data used today, this month and over the last 24 hours, Wi-Fi band and signal, which switch port or access point it's on, and **what it's doing** (streaming, gaming, social media, updates...). The app categories need **Traffic Identification** switched on in UniFi.
+
+You also get the **All devices** view on the Graph, a **Devices** tab in Usage, "uses a lot of data" alerts for devices, and per-device monthly limits.
+
+The password is encrypted with your Windows account and kept on this PC.
 
 ## Alerts
 
@@ -70,6 +94,9 @@ NetPull checks your home network every 5 minutes with quiet ARP requests (local 
 | **Lots of data** | An app uses more than 500 MB in 10 minutes (you can change both). At most once an hour per app. |
 | **Data cap** | You reach your warning level, and when you reach the cap. Off until you set a cap. |
 | **New device** | Something new joins your home network. |
+| **Device offline / back online** | A device you've chosen goes offline for two checks in a row, or comes back. |
+| **Device uses lots of data** | A device uses more than 2 GB in 10 minutes (with UniFi; you can change it). |
+| **Device data limit** | A device reaches the monthly limit you set for it (with UniFi). |
 
 Alerts pop up as Windows notifications (click one to open NetPull) and stay on the Alerts page. Turn pop-ups off in Settings or from the tray menu.
 

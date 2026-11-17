@@ -39,6 +39,11 @@ namespace NetPull.Core
         public bool Trusted;
         public long FirstSeen;
         public long LastSeen;
+        public bool AlertOffline;
+        public double CapGb;
+        public string Ports;
+        public long PortsScanned;
+        public string Kind;
 
         public string DisplayName =>
             !string.IsNullOrWhiteSpace(Name) ? Name :
@@ -116,7 +121,14 @@ CREATE TABLE IF NOT EXISTS ipinfo(ip TEXT PRIMARY KEY, host TEXT, country TEXT, 
 CREATE TABLE IF NOT EXISTS devices(mac TEXT PRIMARY KEY, ip TEXT, hostname TEXT, vendor TEXT, name TEXT, trusted INTEGER DEFAULT 0, first_seen INTEGER, last_seen INTEGER);
 CREATE TABLE IF NOT EXISTS alerts(id INTEGER PRIMARY KEY, t INTEGER, kind TEXT, title TEXT, body TEXT, app INTEGER, unread INTEGER DEFAULT 1);
 CREATE INDEX IF NOT EXISTS ix_alerts_t ON alerts(t);
+CREATE TABLE IF NOT EXISTS dev_min(t INTEGER, mac TEXT, rx INTEGER, tx INTEGER, PRIMARY KEY(t, mac)) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS dev_hour(t INTEGER, mac TEXT, rx INTEGER, tx INTEGER, PRIMARY KEY(t, mac)) WITHOUT ROWID;
 ");
+            // Columns added in 1.1 (ignore "duplicate column" on newer files).
+            foreach (var col in new[] { "alert_offline INTEGER DEFAULT 0", "cap_gb REAL DEFAULT 0", "ports TEXT", "ports_scanned INTEGER DEFAULT 0", "kind TEXT" })
+            {
+                try { Exec("ALTER TABLE devices ADD COLUMN " + col); } catch { }
+            }
             AppsByKey.Clear(); AppsById.Clear(); AdaptersByGuid.Clear();
             using (var cmd = _c.CreateCommand())
             {
@@ -405,6 +417,8 @@ CREATE INDEX IF NOT EXISTS ix_alerts_t ON alerts(t);
                 using (var c = Cmd("DELETE FROM usage_min WHERE t < @t", ("@t", now - 8 * 86400))) c.ExecuteNonQuery();
                 using (var c = Cmd("DELETE FROM usage_hour WHERE t < @t", ("@t", now - (long)keepDays * 86400))) c.ExecuteNonQuery();
                 using (var c = Cmd("DELETE FROM host_hour WHERE t < @t", ("@t", now - (long)keepDays * 86400))) c.ExecuteNonQuery();
+                using (var c = Cmd("DELETE FROM dev_min WHERE t < @t", ("@t", now - 8 * 86400))) c.ExecuteNonQuery();
+                using (var c = Cmd("DELETE FROM dev_hour WHERE t < @t", ("@t", now - (long)keepDays * 86400))) c.ExecuteNonQuery();
                 using (var c = Cmd("DELETE FROM alerts WHERE t < @t", ("@t", now - (long)keepDays * 86400))) c.ExecuteNonQuery();
                 using (var c = Cmd("DELETE FROM ipinfo WHERE updated < @t", ("@t", now - 60L * 86400))) c.ExecuteNonQuery();
             }
@@ -446,13 +460,14 @@ CREATE INDEX IF NOT EXISTS ix_alerts_t ON alerts(t);
             var list = new List<DeviceRecord>();
             lock (Gate)
             {
-                using var cmd = Cmd("SELECT mac, ip, hostname, vendor, name, trusted, first_seen, last_seen FROM devices");
+                using var cmd = Cmd("SELECT mac, ip, hostname, vendor, name, trusted, first_seen, last_seen, alert_offline, cap_gb, ports, ports_scanned, kind FROM devices");
                 using var r = cmd.ExecuteReader();
                 while (r.Read())
                     list.Add(new DeviceRecord
                     {
                         Mac = r.GetString(0), Ip = Str(r, 1), Hostname = Str(r, 2), Vendor = Str(r, 3), Name = Str(r, 4),
-                        Trusted = Long(r, 5) != 0, FirstSeen = Long(r, 6), LastSeen = Long(r, 7)
+                        Trusted = Long(r, 5) != 0, FirstSeen = Long(r, 6), LastSeen = Long(r, 7),
+                        AlertOffline = Long(r, 8) != 0, CapGb = r.IsDBNull(9) ? 0 : r.GetDouble(9), Ports = Str(r, 10), PortsScanned = Long(r, 11), Kind = Str(r, 12)
                     });
             }
             return list;
@@ -462,9 +477,12 @@ CREATE INDEX IF NOT EXISTS ix_alerts_t ON alerts(t);
         {
             lock (Gate)
             {
-                using var cmd = Cmd("INSERT INTO devices(mac, ip, hostname, vendor, name, trusted, first_seen, last_seen) VALUES(@m, @ip, @h, @v, @n, @tr, @f, @l) " +
-                                    "ON CONFLICT(mac) DO UPDATE SET ip=excluded.ip, hostname=excluded.hostname, vendor=excluded.vendor, name=excluded.name, trusted=excluded.trusted, last_seen=excluded.last_seen",
-                    ("@m", d.Mac), ("@ip", d.Ip), ("@h", d.Hostname), ("@v", d.Vendor), ("@n", d.Name), ("@tr", d.Trusted ? 1 : 0), ("@f", d.FirstSeen), ("@l", d.LastSeen));
+                using var cmd = Cmd("INSERT INTO devices(mac, ip, hostname, vendor, name, trusted, first_seen, last_seen, alert_offline, cap_gb, ports, ports_scanned, kind) " +
+                                    "VALUES(@m, @ip, @h, @v, @n, @tr, @f, @l, @ao, @cap, @p, @ps, @k) " +
+                                    "ON CONFLICT(mac) DO UPDATE SET ip=excluded.ip, hostname=excluded.hostname, vendor=excluded.vendor, name=excluded.name, trusted=excluded.trusted, last_seen=excluded.last_seen, " +
+                                    "alert_offline=excluded.alert_offline, cap_gb=excluded.cap_gb, ports=excluded.ports, ports_scanned=excluded.ports_scanned, kind=excluded.kind",
+                    ("@m", d.Mac), ("@ip", d.Ip), ("@h", d.Hostname), ("@v", d.Vendor), ("@n", d.Name), ("@tr", d.Trusted ? 1 : 0), ("@f", d.FirstSeen), ("@l", d.LastSeen),
+                    ("@ao", d.AlertOffline ? 1 : 0), ("@cap", d.CapGb), ("@p", d.Ports), ("@ps", d.PortsScanned), ("@k", d.Kind));
                 cmd.ExecuteNonQuery();
             }
         }
@@ -475,6 +493,79 @@ CREATE INDEX IF NOT EXISTS ix_alerts_t ON alerts(t);
             {
                 using var cmd = Cmd("DELETE FROM devices WHERE mac = @m", ("@m", mac));
                 cmd.ExecuteNonQuery();
+            }
+        }
+
+        // ---------------- device traffic (from UniFi / Tailscale) ----------------
+
+        public static void WriteDeviceMinute(long minute, Dictionary<string, Totals> rows)
+        {
+            if (rows.Count == 0) return;
+            long hour = minute - minute % 3600;
+            lock (Gate)
+            {
+                using var tx = _c.BeginTransaction();
+                foreach (var table in new[] { ("dev_min", minute), ("dev_hour", hour) })
+                {
+                    using var c = _c.CreateCommand();
+                    c.Transaction = tx;
+                    c.CommandText = "INSERT INTO " + table.Item1 + "(t, mac, rx, tx) VALUES(@t, @m, @r, @x) ON CONFLICT(t, mac) DO UPDATE SET rx = rx + excluded.rx, tx = tx + excluded.tx";
+                    var t = c.Parameters.Add("@t", SqliteType.Integer);
+                    var m = c.Parameters.Add("@m", SqliteType.Text);
+                    var r = c.Parameters.Add("@r", SqliteType.Integer);
+                    var x = c.Parameters.Add("@x", SqliteType.Integer);
+                    foreach (var kv in rows)
+                    {
+                        t.Value = table.Item2; m.Value = kv.Key; r.Value = kv.Value.Rx; x.Value = kv.Value.Tx;
+                        c.ExecuteNonQuery();
+                    }
+                }
+                tx.Commit();
+            }
+        }
+
+        public static (long[] rx, long[] tx) DeviceSeries(long from, long to, int bucket, string mac = null)
+        {
+            int n = (int)Math.Max(1, (to - from + bucket - 1) / bucket);
+            var rx = new long[n]; var tx = new long[n];
+            string table = bucket >= 3600 ? "dev_hour" : "dev_min";
+            lock (Gate)
+            {
+                using var cmd = Cmd("SELECT (t - @f) / @b AS k, SUM(rx), SUM(tx) FROM " + table + " WHERE t >= @f AND t < @to" + (mac == null ? "" : " AND mac = @m") + " GROUP BY k",
+                    ("@f", from), ("@to", to), ("@b", bucket), ("@m", mac));
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    long k = r.GetInt64(0);
+                    if (k < 0 || k >= n) continue;
+                    rx[k] += r.GetInt64(1); tx[k] += r.GetInt64(2);
+                }
+            }
+            return (rx, tx);
+        }
+
+        public static Dictionary<string, Totals> DeviceTotals(long from, long to)
+        {
+            var d = new Dictionary<string, Totals>(StringComparer.OrdinalIgnoreCase);
+            long now = Format.NowUnix;
+            bool hourly = to - from > 2 * 86400 || from < now - 7 * 86400;
+            string table = hourly ? "dev_hour" : "dev_min";
+            if (hourly) from -= from % 3600;
+            lock (Gate)
+            {
+                using var cmd = Cmd("SELECT mac, SUM(rx), SUM(tx) FROM " + table + " WHERE t >= @f AND t < @to GROUP BY mac", ("@f", from), ("@to", to));
+                using var r = cmd.ExecuteReader();
+                while (r.Read()) d[r.GetString(0)] = new Totals { Rx = r.GetInt64(1), Tx = r.GetInt64(2) };
+            }
+            return d;
+        }
+
+        public static long DeviceRecent(string mac, long from, long to)
+        {
+            lock (Gate)
+            {
+                using var cmd = Cmd("SELECT COALESCE(SUM(rx + tx), 0) FROM dev_min WHERE mac = @m AND t >= @f AND t < @to", ("@m", mac), ("@f", from), ("@to", to));
+                return Convert.ToInt64(cmd.ExecuteScalar());
             }
         }
 
@@ -528,7 +619,7 @@ CREATE INDEX IF NOT EXISTS ix_alerts_t ON alerts(t);
         {
             lock (Gate)
             {
-                Exec("DELETE FROM usage_min; DELETE FROM usage_hour; DELETE FROM host_hour; DELETE FROM alerts; DELETE FROM devices; DELETE FROM ipinfo;");
+                Exec("DELETE FROM usage_min; DELETE FROM usage_hour; DELETE FROM host_hour; DELETE FROM alerts; DELETE FROM devices; DELETE FROM ipinfo; DELETE FROM dev_min; DELETE FROM dev_hour;");
             }
         }
     }

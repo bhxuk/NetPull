@@ -53,7 +53,7 @@ namespace NetPull.UI
             _pages.Add(new GraphPage());
             _pages.Add(new UsagePage());
             _pages.Add(new ConnectionsPage());
-            _pages.Add(new DevicesPage());
+            _pages.Add(new NetworkPage());
             _pages.Add(new AlertsPage());
             _pages.Add(new SettingsPage());
 

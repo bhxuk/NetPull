@@ -11,6 +11,10 @@ namespace NetPull.Monitor
         public const string Spike = "spike";
         public const string DataCap = "data-cap";
         public const string NewDevice = "new-device";
+        public const string DeviceOffline = "device-offline";
+        public const string DeviceOnline = "device-online";
+        public const string DeviceSpike = "device-spike";
+        public const string DeviceCap = "device-cap";
     }
 
     /// <summary>Turns what the monitor sees into alerts: new apps, changed apps, big downloads, the data cap and new devices.</summary>
