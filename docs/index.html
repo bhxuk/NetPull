@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NetPull for Windows</title>
+<meta name="description" content="See what's using your network. A live graph, which app is using it, who it's talking to, how much you've used, and alerts when something new turns up. Free for Windows 10 and 11.">
+<meta property="og:title" content="NetPull for Windows">
+<meta property="og:description" content="See what's using your network.">
+<meta property="og:image" content="https://bhxuk.github.io/NetPull/images/icon.png">
+<meta name="theme-color" content="#0b0e14">
+<link rel="icon" href="images/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Sora:wght@500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0e14;--side:#0e121a;--panel:#121722;--panel2:#182030;--line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.13);
+  --text:#e8ecf3;--muted:#8a94a8;--down:#22e1f0;--up:#ff4fd8;--good:#3ddc97;--warn:#ffb547;
+  --display:'Sora',system-ui,sans-serif;--body:'Figtree',"Segoe UI",system-ui,sans-serif;--mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--body);font-size:16.5px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+
+/* nav */
+.island{position:sticky;top:0;z-index:10;display:flex;justify-content:center;pointer-events:none}
+.island nav{pointer-events:auto;display:flex;align-items:center;gap:6px;background:#000;border:1px solid rgba(255,255,255,.06);border-top:0;border-radius:0 0 24px 24px;padding:8px 8px 8px 16px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.brand{display:flex;align-items:center;gap:8px;font-family:var(--display);font-weight:700;font-size:15px;text-decoration:none;margin-right:8px}
+.brand img{width:22px;height:22px}
+.island a.link{text-decoration:none;color:var(--muted);font-size:14px;font-weight:500;padding:8px 12px;border-radius:999px}
+.island a.link:hover{color:var(--text);background:rgba(255,255,255,.06)}
+.island a.get{text-decoration:none;background:var(--down);color:#061018;font-weight:700;font-size:14px;padding:8px 16px;border-radius:999px}
+@media (max-width:620px){.island a.link{display:none}}
+
+/* hero */
+header{position:relative;text-align:center;padding:84px 0 0;isolation:isolate}
+.glow{position:absolute;inset:-160px 0 auto;height:900px;z-index:-1;pointer-events:none;
+  background:radial-gradient(520px 320px at 38% 30%,rgba(34,225,240,.18),transparent 70%),radial-gradient(520px 300px at 66% 26%,rgba(255,79,216,.15),transparent 70%)}
+.badge{display:inline-flex;align-items:center;gap:10px;font-size:13.5px;font-weight:600;background:rgba(255,255,255,.05);border:1px solid var(--line2);padding:6px 14px 6px 6px;border-radius:999px}
+.badge span{background:var(--down);color:#061018;font-weight:700;padding:2px 10px;border-radius:999px;font-size:12px}
+h1{font-family:var(--display);font-size:clamp(40px,7vw,76px);line-height:1.03;letter-spacing:-.035em;font-weight:600;margin-top:24px}
+h1 .grad{background:linear-gradient(92deg,var(--down) 10%,#8f8ff0 50%,var(--up) 90%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{max-width:640px;margin:22px auto 0;font-size:clamp(17px,2.2vw,19.5px);color:var(--muted)}
+.cta{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:32px}
+.btn{display:inline-flex;align-items:center;gap:10px;min-height:50px;padding:0 24px;border-radius:999px;font-weight:700;font-size:15.5px;text-decoration:none;border:1px solid var(--line2);transition:transform .15s ease,filter .15s ease}
+.btn svg{width:18px;height:18px}
+.btn.primary{background:var(--down);color:#061018;border-color:transparent;box-shadow:0 10px 34px rgba(34,225,240,.28)}
+.btn.primary:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.btn.ghost:hover{background:rgba(255,255,255,.06)}
+.small{margin-top:14px;color:var(--muted);font-size:13.5px}
+
+/* app mock */
+.app{margin:56px auto 0;max-width:1000px;background:var(--bg);border:1px solid var(--line2);border-radius:16px;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,.6),0 0 0 1px rgba(34,225,240,.06);display:grid;grid-template-columns:190px 1fr;text-align:left}
+.app aside{background:var(--side);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+.app aside .b{display:flex;gap:8px;align-items:center;font-family:var(--display);font-weight:600;font-size:16px;padding:0 6px 16px}
+.app aside .b img{width:22px}
+.app aside .n{padding:8px 12px;border-radius:9px;color:var(--muted);font-size:13.5px;display:flex;justify-content:space-between}
+.app aside .n.on{background:rgba(255,255,255,.06);color:var(--text);box-shadow:inset 3px 0 0 var(--down)}
+.app aside .n i{font-style:normal;background:var(--up);color:#061018;border-radius:9px;font-size:11px;font-weight:700;padding:0 6px}
+.app aside .sp{margin-top:auto;padding:10px 8px 0;font-weight:600;font-size:14px}
+.app aside .sp .d{color:var(--down)} .app aside .sp .u{color:var(--up)}
+.app aside .st{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:7px;margin-top:8px}
+.app aside .st:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--good)}
+.app main{padding:18px 20px;min-width:0}
+.app .top{display:flex;justify-content:space-between;align-items:center}
+.app .top h3{font-family:var(--display);font-weight:600;font-size:20px}
+.pill{border:1px solid var(--line2);border-radius:8px;padding:5px 12px;font-size:12.5px;color:var(--muted);background:var(--panel2)}
+.chips{display:flex;gap:6px;margin:14px 0}
+.chips span{border:1px solid var(--line);border-radius:14px;padding:3px 11px;font-size:12px;color:var(--muted)}
+.chips span.on{border-color:var(--down);color:var(--down);background:rgba(34,225,240,.1)}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:11.5px;color:var(--muted)}
+.card b{display:block;font-size:17px;margin-top:3px;font-weight:600;color:var(--text)}
+.card b.d{color:var(--down)} .card b.u{color:var(--up)}
+.gbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-top:10px;padding:10px;height:230px;position:relative}
+.gbox canvas{width:100%;height:100%;display:block}
+.apps{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-top:10px;padding:10px 14px;font-size:12.5px}
+.apps .r{display:grid;grid-template-columns:1.4fr 2fr 80px 80px;gap:10px;align-items:center;padding:4px 0}
+.apps .bar{height:5px;border-radius:3px;background:var(--panel2);overflow:hidden;display:flex}
+.apps .bar i{display:block;height:100%}
+.apps .r .d{color:var(--down);text-align:right} .apps .r .u{color:var(--up);text-align:right}
+@media (max-width:820px){.app{grid-template-columns:1fr}.app aside{display:none}.cards{grid-template-columns:repeat(2,1fr)}}
+
+/* sections */
+section{padding:110px 0 0}
+.kicker{font-family:var(--mono);font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--down)}
+h2{font-family:var(--display);font-weight:600;font-size:clamp(30px,4.4vw,46px);letter-spacing:-.03em;line-height:1.1;margin-top:10px;max-width:720px}
+.sub{color:var(--muted);margin-top:14px;max-width:640px;font-size:17.5px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px}
+@media (max-width:900px){.grid{grid-template-columns:1fr 1fr}}
+@media (max-width:600px){.grid{grid-template-columns:1fr}}
+.f{background:linear-gradient(180deg,var(--panel),#0f131c);border:1px solid var(--line);border-radius:18px;padding:24px}
+.f .ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:rgba(34,225,240,.1);color:var(--down);margin-bottom:16px}
+.f .ic.p{background:rgba(255,79,216,.1);color:var(--up)}
+.f .ic svg{width:21px;height:21px}
+.f h3{font-family:var(--display);font-weight:600;font-size:18.5px}
+.f p{color:var(--muted);margin-top:8px;font-size:15.5px}
+
+.alerts{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;margin-top:10px}
+@media (max-width:860px){.alerts{grid-template-columns:1fr}}
+.toast{background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:14px 16px;display:flex;gap:14px;margin-bottom:10px}
+.toast .dot{width:10px;height:10px;border-radius:50%;margin-top:7px;flex:none}
+.toast b{font-weight:600;display:block;font-size:15px}
+.toast span{color:var(--muted);font-size:13.5px}
+.toast em{font-style:normal;color:var(--muted);font-size:12px;margin-left:auto;white-space:nowrap}
+
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px;counter-reset:s}
+@media (max-width:800px){.how{grid-template-columns:1fr}}
+.how div{border-top:1px solid var(--line2);padding-top:18px;counter-increment:s}
+.how div:before{content:counter(s,decimal-leading-zero);font-family:var(--mono);color:var(--down);font-size:13px}
+.how h3{font-family:var(--display);font-weight:600;font-size:18px;margin-top:8px}
+.how p{color:var(--muted);margin-top:6px;font-size:15.5px}
+
+.faq{margin-top:34px;max-width:780px}
+.faq details{border-bottom:1px solid var(--line);padding:18px 0}
+.faq summary{cursor:pointer;font-weight:600;font-size:17px;list-style:none;display:flex;justify-content:space-between;gap:20px}
+.faq summary:after{content:"+";color:var(--down);font-size:22px;line-height:1}
+.faq details[open] summary:after{content:"–"}
+.faq p{color:var(--muted);margin-top:10px}
+
+.final{margin:120px 0 0;text-align:center;padding:70px 20px;border:1px solid var(--line);border-radius:26px;background:radial-gradient(600px 260px at 50% 0,rgba(34,225,240,.14),transparent 70%),var(--panel)}
+.final h2{margin:0 auto}
+footer{padding:50px 0 60px;color:var(--muted);font-size:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
+footer a{color:var(--muted);text-decoration:none;margin-left:18px}
+footer a:hover{color:var(--text)}
+</style>
+</head>
+<body>
+
+<div class="island"><nav>
+  <a class="brand" href="#"><img src="images/icon.png" alt="">NetPull</a>
+  <a class="link" href="#features">Features</a>
+  <a class="link" href="#alerts">Alerts</a>
+  <a class="link" href="#privacy">Privacy</a>
+  <a class="link" href="#faq">FAQ</a>
+  <a class="get" href="https://github.com/bhxuk/NetPull/releases/latest/download/NetPull-Setup.exe">Download</a>
+</nav></div>
+
+<header>
+  <div class="glow"></div>
+  <div class="wrap">
+    <a class="badge" href="https://github.com/bhxuk/NetPull/releases/latest" style="text-decoration:none"><span>New</span>Version 1.0 for Windows 10 and 11</a>
+    <h1>See what's using<br><span class="grad">your network.</span></h1>
+    <p class="lead">A live graph of everything going in and out of your PC, which app is using it, who it's talking to, and how much you've used. With alerts when something new turns up.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/bhxuk/NetPull/releases/latest/download/NetPull-Setup.exe">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg>Download for Windows</a>
+      <a class="btn ghost" href="https://github.com/bhxuk/NetPull">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>View on GitHub</a>
+    </div>
+    <p class="small">Free and open source · No account · Your data stays on your PC</p>
+
+    <div class="app" aria-label="An illustration of the NetPull window">
+      <aside>
+        <div class="b"><img src="images/icon.png" alt="">NetPull</div>
+        <div class="n on">Graph</div><div class="n">Usage</div><div class="n">Connections</div><div class="n">Devices</div><div class="n">Alerts <i>3</i></div><div class="n">Settings</div>
+        <div class="sp"><div class="d" id="sd">↓ 4.82 MB/s</div><div class="u" id="su">↑ 312 KB/s</div></div>
+        <div class="st">Watching your network</div>
+      </aside>
+      <main>
+        <div class="top"><h3>Graph</h3><span class="pill">All adapters ▾</span></div>
+        <div class="chips"><span class="on">Live</span><span>3 hours</span><span>24 hours</span><span>Week</span><span>Month</span></div>
+        <div class="cards">
+          <div class="card">Download now<b class="d" id="cd">4.82 MB/s</b></div>
+          <div class="card">Upload now<b class="u" id="cu">312 KB/s</b></div>
+          <div class="card">Since NetPull started<b>18.4 GB</b></div>
+          <div class="card">Busiest app<b>Steam</b></div>
+        </div>
+        <div class="gbox"><canvas id="g"></canvas></div>
+        <div class="apps">
+          <div class="r"><span>Steam</span><span class="bar"><i style="width:62%;background:var(--down)"></i><i style="width:3%;background:var(--up)"></i></span><span class="d">↓ 1.21 GB</span><span class="u">↑ 41 MB</span></div>
+          <div class="r"><span>Google Chrome</span><span class="bar"><i style="width:22%;background:var(--down)"></i><i style="width:4%;background:var(--up)"></i></span><span class="d">↓ 418 MB</span><span class="u">↑ 66 MB</span></div>
+          <div class="r"><span>Tailscale</span><span class="bar"><i style="width:9%;background:var(--down)"></i><i style="width:7%;background:var(--up)"></i></span><span class="d">↓ 172 MB</span><span class="u">↑ 131 MB</span></div>
+        </div>
+      </main>
+    </div>
+  </div>
+</header>
+
+<section id="features"><div class="wrap">
+  <div class="kicker">What it shows</div>
+  <h2>Every byte, every app, every address.</h2>
+  <p class="sub">NetPull reads Windows' own network events, so it knows exactly which app sent or received each byte. No driver, no firewall changes.</p>
+  <div class="grid">
+    <div class="f"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 17l5-6 4 3 5-8 4 5"/><path d="M3 21h18"/></svg></div><h3>Live graph</h3><p>Download and upload, second by second, with 3 hours, a day, a week or a month of history. Click any point to see which apps were busy.</p></div>
+    <div class="f"><div class="ic p"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M4 12h16M4 18h7"/></svg></div><h3>Usage by app</h3><p>Today, this week, this month or 90 days. Click an app to see the servers it talked to, or flip to hosts to see it the other way round.</p></div>
+    <div class="f"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></div><h3>Connections</h3><p>Every open connection with its host name, country, ISP, port and live speed. Search it, sort it, look an address up.</p></div>
+    <div class="f"><div class="ic p"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div><h3>Devices on your network</h3><p>Quiet checks every 5 minutes find what's on your Wi-Fi and wired network. Name them, trust them, and hear about newcomers.</p></div>
+    <div class="f"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h6"/><circle cx="18" cy="16" r="3"/></svg></div><h3>Pick an adapter</h3><p>See everything, or just Ethernet, Wi-Fi, Tailscale or your VPN, so nothing gets counted twice.</p></div>
+    <div class="f"><div class="ic p"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="13" width="7" height="7" rx="1.5"/><path d="M14 4l6 6M20 4v6h-6"/></svg></div><h3>Mini graph and tray</h3><p>A floating speed graph you can drag anywhere, and a tray icon that is itself a tiny live graph.</p></div>
+  </div>
+</div></section>
+
+<section id="alerts"><div class="wrap alerts">
+  <div>
+    <div class="kicker">Alerts</div>
+    <h2>Know when something new turns up.</h2>
+    <p class="sub">NetPull spends its first few minutes learning the apps you already use, then tells you when anything changes.</p>
+  </div>
+  <div>
+    <div class="toast"><i class="dot" style="background:var(--down)"></i><div><b>Zoom went online for the first time</b><span>C:\Users\…\Zoom\bin\Zoom.exe</span></div><em>2 min ago</em></div>
+    <div class="toast"><i class="dot" style="background:var(--warn)"></i><div><b>Discord has changed</b><span>Version 1.0.9165 → 1.0.9171. Usually an update.</span></div><em>1 hr ago</em></div>
+    <div class="toast"><i class="dot" style="background:var(--up)"></i><div><b>OneDrive is using a lot of data</b><span>2.4 GB in the last 10 minutes.</span></div><em>3 hr ago</em></div>
+    <div class="toast"><i class="dot" style="background:var(--good)"></i><div><b>New device on your network</b><span>Amazon device at 192.168.1.47</span></div><em>Yesterday</em></div>
+  </div>
+</div></section>
+
+<section id="privacy"><div class="wrap">
+  <div class="kicker">Privacy</div>
+  <h2>It watches your network. Nobody watches it.</h2>
+  <div class="how">
+    <div><h3>Stays on your PC</h3><p>History lives in a small database in your own app data folder. There's no account and nothing is uploaded.</p></div>
+    <div><h3>Lookups you control</h3><p>Countries and ISPs come from ip-api.com and device makers from macvendors.com. Only remote addresses are sent, and both can be switched off.</p></div>
+    <div><h3>Watch only</h3><p>NetPull never blocks, changes your firewall or installs a driver. It asks for admin rights once, at install, to read Windows' network events.</p></div>
+  </div>
+</div></section>
+
+<section id="faq"><div class="wrap">
+  <div class="kicker">Questions</div>
+  <h2>Good to know</h2>
+  <div class="faq">
+    <details><summary>Why does it need admin rights?</summary><p>Windows only lets administrators read the network events that say which app owns each byte. The installer sets up a startup task, so you're asked once and never again.</p></details>
+    <details><summary>Windows says "Windows protected your PC".</summary><p>The installer isn't code-signed. Click More info, then Run anyway.</p></details>
+    <details><summary>Can it set a data cap?</summary><p>Yes. Set your monthly allowance and the day your bill resets, and NetPull warns you at a level you pick and again when you hit it. It's off until you turn it on.</p></details>
+    <details><summary>Does it slow my PC down?</summary><p>No. It adds traffic up once a second in memory and writes to its history once a minute.</p></details>
+    <details><summary>How long is history kept?</summary><p>90 days by default, or 30 days or a year if you prefer. Second-by-second detail is for the live graph; minute detail is kept for a week.</p></details>
+  </div>
+
+  <div class="final">
+    <h2>See your network clearly.</h2>
+    <p class="sub" style="margin:14px auto 0">Free for Windows 10 and 11.</p>
+    <div class="cta"><a class="btn primary" href="https://github.com/bhxuk/NetPull/releases/latest/download/NetPull-Setup.exe">Download NetPull</a><a class="btn ghost" href="https://github.com/bhxuk/NetPull/blob/main/docs/USER-GUIDE.md">Read the guide</a></div>
+  </div>
+
+  <footer><span>NetPull · MIT licence</span><span><a href="https://github.com/bhxuk/NetPull">GitHub</a><a href="https://github.com/bhxuk/NetPull/blob/main/CHANGELOG.md">What's new</a><a href="https://github.com/bhxuk/NetPull/issues">Report a problem</a></span></footer>
+</div></section>
+
+<script>
+(() => {
+  const c = document.getElementById('g'), x = c.getContext('2d');
+  const N = 120, down = [], up = [];
+  let t = 0;
+  const next = () => {
+    t += 1;
+    const burst = Math.max(0, Math.sin(t / 23)) ** 3;
+    down.push(1.2 + 3.6 * burst + Math.random() * 0.9 + (Math.random() < 0.04 ? 2.5 : 0));
+    up.push(0.25 + 0.5 * Math.max(0, Math.sin(t / 17 + 2)) ** 2 + Math.random() * 0.2);
+    if (down.length > N) { down.shift(); up.shift(); }
+  };
+  for (let i = 0; i < N; i++) next();
+  const fmt = v => v >= 1 ? v.toFixed(2) + ' MB/s' : Math.round(v * 1024) + ' KB/s';
+  function draw() {
+    const r = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+    c.width = w * r; c.height = h * r; x.setTransform(r, 0, 0, r, 0, 0);
+    x.clearRect(0, 0, w, h);
+    x.strokeStyle = 'rgba(255,255,255,.08)'; x.lineWidth = 1;
+    for (let i = 1; i < 4; i++) { const y = Math.round(h * i / 4) + .5; x.beginPath(); x.moveTo(0, y); x.lineTo(w, y); x.stroke(); }
+    const top = 7;
+    const series = (v, col) => {
+      const pts = v.map((d, i) => [i * w / (N - 1), h - Math.min(1, d / top) * (h - 6)]);
+      const g = x.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, col + '70'); g.addColorStop(1, col + '04');
+      x.beginPath(); x.moveTo(0, h); pts.forEach(p => x.lineTo(p[0], p[1])); x.lineTo(w, h); x.closePath(); x.fillStyle = g; x.fill();
+      x.beginPath(); pts.forEach((p, i) => i ? x.lineTo(p[0], p[1]) : x.moveTo(p[0], p[1]));
+      x.shadowColor = col; x.shadowBlur = 12; x.strokeStyle = col; x.lineWidth = 1.8; x.stroke(); x.shadowBlur = 0;
+    };
+    series(down, '#22e1f0'); series(up, '#ff4fd8');
+  }
+  const ids = ['sd', 'su', 'cd', 'cu'].map(i => document.getElementById(i));
+  function tick() {
+    next(); draw();
+    const d = fmt(down[N - 1]), u = fmt(up[N - 1]);
+    ids[0].textContent = '↓ ' + d; ids[1].textContent = '↑ ' + u; ids[2].textContent = d; ids[3].textContent = u;
+  }
+  draw();
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) setInterval(tick, 1000);
+  addEventListener('resize', draw);
+})();
+</script>
+</body>
+</html>
