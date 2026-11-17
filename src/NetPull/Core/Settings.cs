@@ -69,6 +69,22 @@ namespace NetPull.Core
         public int LanScanMinutes { get; set; } = 5;
         public bool LanBaselineDone { get; set; }
 
+        // Whole network
+        public bool PortScanNew { get; set; } = true;
+        public bool Tailscale { get; set; } = true;
+        public bool AlertDeviceOffline { get; set; } = true;
+        public bool AlertDeviceSpike { get; set; } = true;
+        public int DeviceSpikeMegabytes { get; set; } = 2000;
+        public string GraphSource { get; set; } = "pc";   // "pc" or "network"
+
+        // UniFi (optional, read-only)
+        public bool UniFi { get; set; } = false;
+        public string UniFiHost { get; set; } = "";
+        public string UniFiUser { get; set; } = "";
+        public string UniFiPasswordProtected { get; set; } = "";
+        public string UniFiSite { get; set; } = "default";
+        public bool UniFiBaselineDone { get; set; }
+
         // Lookups
         public bool OnlineLookups { get; set; } = true;
         public bool VendorLookups { get; set; } = true;
@@ -137,6 +153,33 @@ namespace NetPull.Core
                 }
                 catch { }
             }
+        }
+    }
+}
+
+namespace NetPull.Core
+{
+    /// <summary>Keeps the UniFi password encrypted with Windows (DPAPI), readable only by this Windows account.</summary>
+    public static class Secret
+    {
+        private static readonly byte[] Salt = System.Text.Encoding.UTF8.GetBytes("NetPull.bhxuk");
+
+        public static string Protect(string plain)
+        {
+            if (string.IsNullOrEmpty(plain)) return "";
+            var bytes = System.Security.Cryptography.ProtectedData.Protect(System.Text.Encoding.UTF8.GetBytes(plain), Salt, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+            return Convert.ToBase64String(bytes);
+        }
+
+        public static string Unprotect(string stored)
+        {
+            if (string.IsNullOrEmpty(stored)) return "";
+            try
+            {
+                var bytes = System.Security.Cryptography.ProtectedData.Unprotect(Convert.FromBase64String(stored), Salt, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+                return System.Text.Encoding.UTF8.GetString(bytes);
+            }
+            catch { return ""; }
         }
     }
 }

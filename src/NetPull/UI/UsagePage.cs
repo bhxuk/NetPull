@@ -20,6 +20,7 @@ namespace NetPull.UI
 
         private int _period;
         private bool _hosts;
+        private bool _devices;
         private readonly StackPanel _list = new StackPanel();
         private readonly TextBlock _totalDown = Ui.Text("", 20, "DownBrush", FontWeights.SemiBold);
         private readonly TextBlock _totalUp = Ui.Text("", 20, "UpBrush", FontWeights.SemiBold);
@@ -53,8 +54,9 @@ namespace NetPull.UI
             DockPanel.SetDock(bar, Dock.Top);
             var tabs = new StackPanel { Orientation = Orientation.Horizontal };
             DockPanel.SetDock(tabs, Dock.Right);
-            tabs.Children.Add(Ui.Chip("Apps", "usage-tab", true, () => { _hosts = false; Refresh(); }));
-            tabs.Children.Add(Ui.Chip("Hosts", "usage-tab", false, () => { _hosts = true; Refresh(); }));
+            tabs.Children.Add(Ui.Chip("Apps", "usage-tab", true, () => { _hosts = false; _devices = false; Refresh(); }));
+            tabs.Children.Add(Ui.Chip("Hosts", "usage-tab", false, () => { _hosts = true; _devices = false; Refresh(); }));
+            tabs.Children.Add(Ui.Chip("Devices", "usage-tab", false, () => { _hosts = false; _devices = true; Refresh(); }));
             bar.Children.Add(tabs);
             var chips = new StackPanel { Orientation = Orientation.Horizontal };
             for (int i = 0; i < Periods.Names.Length; i++)
@@ -123,7 +125,7 @@ namespace NetPull.UI
                 var (fromL, toL) = Periods.Range(_period);
                 long from = Format.LocalToUnix(fromL), to = Format.LocalToUnix(toL);
                 int adapter = AdapterPicker.Current;
-                bool hosts = _hosts;
+                bool hosts = _hosts, devicesTab = _devices;
 
                 var apps = await Task.Run(() => Db.AppTotals(from, to, adapter));
                 if (Format.NowUnix < to)
@@ -139,7 +141,16 @@ namespace NetPull.UI
                 _total.Text = Format.Size(rx + tx);
                 UpdateCap();
 
-                if (hosts)
+                if (devicesTab)
+                {
+                    var dev = await Task.Run(() => Db.DeviceTotals(from, to));
+                    long drx = dev.Values.Sum(v => v.Rx), dtx = dev.Values.Sum(v => v.Tx);
+                    _totalDown.Text = Format.Size(drx);
+                    _totalUp.Text = Format.Size(dtx);
+                    _total.Text = Format.Size(drx + dtx);
+                    FillDevices(dev);
+                }
+                else if (hosts)
                 {
                     var rows = await Task.Run(() => Db.HostTotals(from, to, adapter));
                     FillHosts(rows);
@@ -349,12 +360,50 @@ namespace NetPull.UI
             }
         }
 
+        private void FillDevices(Dictionary<string, Totals> totals)
+        {
+            _list.Children.Clear();
+            var names = NetworkModel.Devices.Where(d => d.Mac != null).GroupBy(d => d.Mac, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            var rows = totals.Where(kv => kv.Value.Sum > 0).OrderByDescending(kv => kv.Value.Sum).ToList();
+            _exportHeader = new[] { "Device", "MAC", "Address", "Downloaded (bytes)", "Uploaded (bytes)", "Total (bytes)" };
+            _exportRows = rows.Select(kv =>
+            {
+                names.TryGetValue(kv.Key, out var d);
+                return new[] { d?.DisplayName ?? kv.Key, kv.Key, d?.Ip ?? "", kv.Value.Rx.ToString(), kv.Value.Tx.ToString(), kv.Value.Sum.ToString() };
+            }).ToList();
+            if (rows.Count == 0)
+            {
+                _list.Children.Add(Settings.Current.UniFi
+                    ? Ui.Empty("Nothing recorded yet", "NetPull adds up each device's data from UniFi every minute. Leave it running and this fills in.")
+                    : Ui.Empty("Connect UniFi to see every device", "A PC can't see other devices' traffic by itself. Add a view-only UniFi user in Settings and NetPull records how much each device uses."));
+                return;
+            }
+            Header("Device");
+            long max = rows.Max(r => r.Value.Sum);
+            foreach (var kv in rows)
+            {
+                names.TryGetValue(kv.Key, out var d);
+                var g = RowGrid();
+                g.Margin = new Thickness(4, 6, 4, 6);
+                Put(g, Ui.Icon(TopologyMap.Glyph(d?.Kind ?? "device"), 15, "DownBrush"), 0);
+                var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                sp.Children.Add(Ui.Text(d?.DisplayName ?? kv.Key, 13.5));
+                sp.Children.Add(Ui.Text(string.Join("   ", new[] { d?.Ip, kv.Key }.Where(x => !string.IsNullOrEmpty(x))), 11, "MutedBrush"));
+                Put(g, sp, 1);
+                Put(g, UsageBar.Make(kv.Value.Rx, kv.Value.Tx, max), 2);
+                Put(g, Num(Format.Size(kv.Value.Rx), "DownBrush"), 3);
+                Put(g, Num(Format.Size(kv.Value.Tx), "UpBrush"), 4);
+                Put(g, Num(Format.Size(kv.Value.Sum), "TextBrush"), 5);
+                _list.Children.Add(g);
+            }
+        }
+
         private void Export()
         {
             try
             {
                 var (from, to) = Periods.Range(_period);
-                string name = "NetPull " + (_hosts ? "hosts" : "apps") + " " + from.ToString("yyyy-MM-dd") + " to " + to.AddDays(-1).ToString("yyyy-MM-dd") + ".csv";
+                string name = "NetPull " + (_devices ? "devices" : _hosts ? "hosts" : "apps") + " " + from.ToString("yyyy-MM-dd") + " to " + to.AddDays(-1).ToString("yyyy-MM-dd") + ".csv";
                 string saved = Csv.Save(name, _exportHeader, _exportRows);
                 if (saved != null) App.Instance.Tray?.Notify("Exported", saved);
             }

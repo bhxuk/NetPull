@@ -37,6 +37,10 @@ namespace NetPull.UI
         private List<SecondSample> _liveSamples = new List<SecondSample>();
         private DateTime _lastHistory = DateTime.MinValue;
         private bool _loading;
+        private bool _network = Settings.Current.GraphSource == "network";
+        private readonly TextBlock _stat3Label = Ui.Text("Since NetPull started", 12, "MutedBrush");
+        private readonly TextBlock _stat4Label = Ui.Text("Busiest app", 12, "MutedBrush");
+        private ComboBox _picker;
 
         public GraphPage()
         {
@@ -50,8 +54,15 @@ namespace NetPull.UI
             // Title and adapter filter
             var head = new DockPanel { Margin = new Thickness(0, 0, 0, 14) };
             var picker = AdapterPicker.Create();
-            DockPanel.SetDock(picker, Dock.Right);
-            head.Children.Add(picker);
+            _picker = picker;
+            var headRight = new StackPanel { Orientation = Orientation.Horizontal };
+            DockPanel.SetDock(headRight, Dock.Right);
+            var src = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
+            src.Children.Add(Ui.Chip("This PC", "graph-src", !_network, () => SetSource(false)));
+            src.Children.Add(Ui.Chip("All devices", "graph-src", _network, () => SetSource(true)));
+            headRight.Children.Add(src);
+            headRight.Children.Add(picker);
+            head.Children.Add(headRight);
             head.Children.Add(Ui.Text("Graph", 24, "TextBrush", FontWeights.SemiBold));
             root.Children.Add(head);
             AdapterPicker.Changed += () => { _lastHistory = DateTime.MinValue; Refresh(); };
@@ -85,8 +96,8 @@ namespace NetPull.UI
             Grid.SetRow(stats, 2);
             stats.Children.Add(Stat(_stat1Label, _stat1));
             stats.Children.Add(Stat(_stat2Label, _stat2));
-            stats.Children.Add(Stat(Ui.Text("Since NetPull started", 12, "MutedBrush"), _stat3));
-            stats.Children.Add(Stat(Ui.Text("Busiest app", 12, "MutedBrush"), _stat4));
+            stats.Children.Add(Stat(_stat3Label, _stat3));
+            stats.Children.Add(Stat(_stat4Label, _stat4));
             root.Children.Add(stats);
 
             // Graph
@@ -135,8 +146,26 @@ namespace NetPull.UI
             Refresh();
         }
 
+        private void SetSource(bool network)
+        {
+            _network = network;
+            Settings.Current.GraphSource = network ? "network" : "pc";
+            Settings.Save();
+            _graph.Selected = -1;
+            _lastHistory = DateTime.MinValue;
+            Refresh();
+        }
+
         public void Tick(SecondSample s)
         {
+            if (_network)
+            {
+                if (_range == 0) { if (s.Time % 5 == 0) RefreshNetworkLive(); }
+                else if (_end == 0 && DateTime.UtcNow - _lastHistory > TimeSpan.FromSeconds(60)) Refresh();
+                var devs = NetworkModel.Devices;
+                _stat3.Text = devs.Count(d => d.Group == "lan" && d.Online) + " online";
+                return;
+            }
             if (_range == 0) RefreshLive();
             else if (_end == 0 && DateTime.UtcNow - _lastHistory > TimeSpan.FromSeconds(60)) Refresh();
             _stat3.Text = Format.Size(TrafficMonitor.Instance.SessionRx + TrafficMonitor.Instance.SessionTx);
@@ -169,7 +198,11 @@ namespace NetPull.UI
             _forward.IsEnabled = _end != 0;
             _stat1Label.Text = live ? "Download now" : "Downloaded";
             _stat2Label.Text = live ? "Upload now" : "Uploaded";
-            if (live) { _when.Text = "Last 5 minutes"; RefreshLive(); ShowTopApps(); }
+            _stat3Label.Text = _network ? "Devices" : "Since NetPull started";
+            _stat4Label.Text = _network ? "Busiest device" : "Busiest app";
+            if (_picker != null) _picker.Visibility = _network ? Visibility.Collapsed : Visibility.Visible;
+            if (_network && live) { _when.Text = "Last 5 minutes, from UniFi"; RefreshNetworkLive(); ShowTopApps(); }
+            else if (live) { _when.Text = "Last 5 minutes"; RefreshLive(); ShowTopApps(); }
             else _ = RefreshHistory();
         }
 
@@ -193,6 +226,29 @@ namespace NetPull.UI
             if (_graph.Selected < 0 && now % 5 == 0) ShowTopApps();
         }
 
+        private List<NetSample> _netSamples = new List<NetSample>();
+
+        private void RefreshNetworkLive()
+        {
+            _netSamples = NetworkModel.Samples(310);
+            long now = Format.NowUnix;
+            long start = now - now % 10 - 290;
+            var down = new double[30];
+            var up = new double[30];
+            foreach (var s in _netSamples)
+            {
+                long i = (s.Time - start) / 10;
+                if (i < 0 || i >= 30) continue;
+                down[i] += s.Down / (double)Math.Max(1, s.Seconds);
+                up[i] += s.Up / (double)Math.Max(1, s.Seconds);
+            }
+            _graph.SetData(down, up, start, 10);
+            var last = _netSamples.LastOrDefault();
+            _stat1.Text = Format.Rate(last == null ? 0 : last.Down / (double)Math.Max(1, last.Seconds));
+            _stat2.Text = Format.Rate(last == null ? 0 : last.Up / (double)Math.Max(1, last.Seconds));
+            if (_graph.Selected < 0) ShowTopApps();
+        }
+
         private (long from, long to) Span()
         {
             int step = RangeStep[_range];
@@ -211,7 +267,8 @@ namespace NetPull.UI
                 var (from, to) = Span();
                 int step = RangeStep[_range];
                 int adapter = AdapterPicker.Current;
-                var (rx, tx) = await Task.Run(() => Db.Series(from, to, step, adapter));
+                bool network = _network;
+                var (rx, tx) = await Task.Run(() => network ? Db.DeviceSeries(from, to, step) : Db.Series(from, to, step, adapter));
                 var down = rx.Select(v => v / (double)step).ToArray();
                 var up = tx.Select(v => v / (double)step).ToArray();
                 _graph.SetData(down, up, from, step);
@@ -230,6 +287,37 @@ namespace NetPull.UI
         /// <summary>The busiest apps across the whole view.</summary>
         private async void ShowTopApps()
         {
+            if (_network)
+            {
+                if (!Settings.Current.UniFi || !NetworkModel.UniFiOk)
+                {
+                    _appsTitle.Text = "Connect UniFi to see every device";
+                    _apps.Children.Clear();
+                    _apps.Children.Add(Ui.Wrap("A PC can't see other devices' traffic by itself. Add a view-only UniFi user in Settings and this graph shows your whole network, with the busiest devices here.", 13));
+                    _stat4.Text = "-";
+                    return;
+                }
+                var dt = new Dictionary<string, Totals>(StringComparer.OrdinalIgnoreCase);
+                if (_range == 0)
+                {
+                    foreach (var sm in _netSamples)
+                        foreach (var kv in sm.Devices)
+                        {
+                            dt.TryGetValue(kv.Key, out var t);
+                            t.Rx += kv.Value.down; t.Tx += kv.Value.up;
+                            dt[kv.Key] = t;
+                        }
+                    _appsTitle.Text = "Busiest devices in the last 5 minutes";
+                }
+                else
+                {
+                    var (f, t2) = Span();
+                    dt = await Task.Run(() => Db.DeviceTotals(f, t2));
+                    _appsTitle.Text = "Busiest devices in this view";
+                }
+                FillDevices(dt);
+                return;
+            }
             int adapter = AdapterPicker.Current;
             Dictionary<int, Totals> totals;
             if (_range == 0)
@@ -256,6 +344,31 @@ namespace NetPull.UI
 
         private async void ShowAppsAt(int index)
         {
+            if (_network)
+            {
+                long ts = _graph.StartUnix + (long)index * _graph.Step;
+                var whenN = Format.FromUnix(ts).ToLocalTime();
+                var dt = new Dictionary<string, Totals>(StringComparer.OrdinalIgnoreCase);
+                if (_range == 0)
+                {
+                    foreach (var sm in _netSamples.Where(x => x.Time >= ts && x.Time < ts + 10))
+                        foreach (var kv in sm.Devices)
+                        {
+                            dt.TryGetValue(kv.Key, out var t);
+                            t.Rx += kv.Value.down; t.Tx += kv.Value.up;
+                            dt[kv.Key] = t;
+                        }
+                    _appsTitle.Text = "Devices around " + whenN.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
+                }
+                else
+                {
+                    int step = _graph.Step;
+                    dt = await Task.Run(() => Db.DeviceTotals(ts, ts + step));
+                    _appsTitle.Text = "Devices at " + whenN.ToString(step >= 3600 ? "ddd d MMM, HH:mm" : "HH:mm", CultureInfo.CurrentCulture);
+                }
+                FillDevices(dt);
+                return;
+            }
             int adapter = AdapterPicker.Current;
             Dictionary<int, Totals> totals = new Dictionary<int, Totals>();
             long t0 = _graph.StartUnix + (long)index * _graph.Step;
@@ -281,6 +394,38 @@ namespace NetPull.UI
                                   + " (" + (step >= 3600 ? step / 3600 + " hr" : step / 60 + " min") + ")";
             }
             Fill(totals);
+        }
+
+        private void FillDevices(Dictionary<string, Totals> totals)
+        {
+            _apps.Children.Clear();
+            var devs = NetworkModel.Devices.Where(d => d.Mac != null).GroupBy(d => d.Mac, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            var list = totals.Where(kv => kv.Value.Sum > 0).OrderByDescending(kv => kv.Value.Sum).Take(10).ToList();
+            string Name(string mac) => devs.TryGetValue(mac, out var d) ? d.DisplayName : mac;
+            _stat4.Text = list.Count == 0 ? "Nothing yet" : Name(list[0].Key);
+            if (list.Count == 0) { _apps.Children.Add(Ui.Text("No traffic here.", 13, "MutedBrush")); return; }
+            long max = list.Max(kv => kv.Value.Sum);
+            foreach (var kv in list)
+            {
+                devs.TryGetValue(kv.Key, out var d);
+                var g = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
+                g.Children.Add(Ui.Icon(TopologyMap.Glyph(d?.Kind ?? "device"), 15, "DownBrush"));
+                var name = Ui.Text(Name(kv.Key), 13.5);
+                name.ToolTip = d?.Ip;
+                Grid.SetColumn(name, 1); g.Children.Add(name);
+                var bar = UsageBar.Make(kv.Value.Rx, kv.Value.Tx, max);
+                Grid.SetColumn(bar, 2); g.Children.Add(bar);
+                var dn = Ui.Text("↓ " + Format.Size(kv.Value.Rx), 12.5, "DownBrush"); dn.HorizontalAlignment = HorizontalAlignment.Right;
+                Grid.SetColumn(dn, 3); g.Children.Add(dn);
+                var up = Ui.Text("↑ " + Format.Size(kv.Value.Tx), 12.5, "UpBrush"); up.HorizontalAlignment = HorizontalAlignment.Right;
+                Grid.SetColumn(up, 4); g.Children.Add(up);
+                _apps.Children.Add(g);
+            }
         }
 
         private void Fill(Dictionary<int, Totals> totals)

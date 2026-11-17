@@ -28,6 +28,12 @@ namespace NetPull.Monitor
         public static event Action ScanFinished;
         public static event Action<double> Progress;
 
+        /// <summary>Lets other sources (UniFi) report a device NetPull hasn't seen before.</summary>
+        public static void RaiseNewDevice(DeviceRecord d)
+        {
+            try { NewDevice?.Invoke(d); } catch { }
+        }
+
         public static void Start()
         {
             Http.DefaultRequestHeaders.UserAgent.ParseAdd("NetPull/" + Updates.CurrentText);

@@ -17,7 +17,7 @@ namespace NetPull.UI
 
         private readonly StackPanel _list = new StackPanel();
         private int _filter;
-        private static readonly string[] Filters = { "All", "New apps", "App changes", "Data use", "Devices" };
+        private static readonly string[] Filters = { "All", "New apps", "App changes", "Data use", "Network" };
 
         public AlertsPage()
         {
@@ -69,8 +69,8 @@ namespace NetPull.UI
             {
                 case 1: return a.Kind == AlertKinds.NewApp;
                 case 2: return a.Kind == AlertKinds.AppChanged;
-                case 3: return a.Kind == AlertKinds.Spike || a.Kind == AlertKinds.DataCap;
-                case 4: return a.Kind == AlertKinds.NewDevice;
+                case 3: return a.Kind == AlertKinds.Spike || a.Kind == AlertKinds.DataCap || a.Kind == AlertKinds.DeviceSpike || a.Kind == AlertKinds.DeviceCap;
+                case 4: return a.Kind == AlertKinds.NewDevice || a.Kind == AlertKinds.DeviceOffline || a.Kind == AlertKinds.DeviceOnline || a.Kind == AlertKinds.DeviceSpike || a.Kind == AlertKinds.DeviceCap;
                 default: return true;
             }
         }
@@ -84,6 +84,10 @@ namespace NetPull.UI
                 case AlertKinds.Spike: return (Ui.GlyphDown, "UpBrush");
                 case AlertKinds.DataCap: return (Ui.GlyphUsage, "BadBrush");
                 case AlertKinds.NewDevice: return (Ui.GlyphDevices, "GoodBrush");
+                case AlertKinds.DeviceOffline: return (Ui.GlyphDevices, "BadBrush");
+                case AlertKinds.DeviceOnline: return (Ui.GlyphDevices, "GoodBrush");
+                case AlertKinds.DeviceSpike: return (Ui.GlyphDown, "UpBrush");
+                case AlertKinds.DeviceCap: return (Ui.GlyphUsage, "BadBrush");
                 default: return (Ui.GlyphInfo, "MutedBrush");
             }
         }
